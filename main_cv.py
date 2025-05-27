@@ -1,8 +1,8 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
 from data_preprocess_single import preprocess_data, generate_sl_splits, get_ppi_graph_tot, report_coverage
 from data_preprocess_single import generate_sl_split_cv2, generate_sl_split_cv3, generate_sl_split_cv3_new
-from dataset import SLDataset, get_sub_graph
-from model import TwoGCN_SLClassifier,  FocalLoss
+from dataset_single import SLDataset, get_sub_graph
+from model_single import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -147,7 +147,7 @@ if __name__ == "__main__":
 
     sl_data = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{cellline_name}.csv")
     # print(sl_data.head())
-    sl_data = preprocess_data(sl_data)
+    sl_data = preprocess_data(sl_data, cellline_name)
     report_coverage(sl_data)
     print(sl_data.head())
     # sl_balanced, cv_splits = generate_sl_cv_splits(sl_data, pos_neg_ratio=ratio)
