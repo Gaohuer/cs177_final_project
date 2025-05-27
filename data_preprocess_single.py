@@ -13,12 +13,13 @@ import pandas as pd
 from torch_geometric.data import Data as GeometricData
 
 
-def preprocess_data(sl_data):
+def preprocess_data(sl_data, cell_line):
     '''
     为sl_data去除不需要的项，添加对应的id
     output: sl_data
     '''
     sl_data = sl_data[['gene_1','gene_2','SL_or_not']]
+    sl_data['cell_line'] = cell_line
     # scg_embedding
     ppi_df = pd.read_csv('./data/gene_ppi_index_mapping.csv')
     ppi_dict = dict(zip(ppi_df['gene'], ppi_df['index']))

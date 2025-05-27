@@ -147,7 +147,7 @@ if __name__ == "__main__":
 
     sl_data = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{cellline_name}.csv")
     # print(sl_data.head())
-    sl_data = preprocess_data(sl_data)
+    sl_data = preprocess_data(sl_data, cellline_name)
     report_coverage(sl_data)
     print(sl_data.head())
     # sl_balanced, cv_splits = generate_sl_cv_splits(sl_data, pos_neg_ratio=ratio)
