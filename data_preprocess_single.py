@@ -254,6 +254,105 @@ def generate_sl_split_cv2(
 
     return train_df, val_df, test_df
 
+def generate_sl_split_cv2_new(
+    data,
+    pos_neg_ratio=5,
+    test_ratio=0.2,
+    val_ratio_within_train=0.2,
+    random_state=42
+):
+    '''
+    分割数据为 train/val/test，其中 test 中的基因对最多一个基因出现在 train_val 中。
+
+    参数：
+        data: 原始 dataframe，包含列 ['gene1', 'gene2', 'SL_or_not']
+        pos_neg_ratio: 训练数据中正负样本比
+        test_ratio: 测试集比例（占全数据）
+        val_ratio_within_train: 验证集占训练集+验证集的比例
+        random_state: 随机种子
+
+    返回：
+        train_df, val_df, test_df
+    '''
+    np.random.seed(random_state)
+    data = data.copy()
+    data['SL_or_not'] = data['SL_or_not'].astype(int)
+
+    # Step 1: 平衡正负样本
+    pos_samples = data[data['SL_or_not'] == 1]
+    neg_samples = data[data['SL_or_not'] == 0]
+
+    n_pos = len(pos_samples)
+    n_neg_needed = int(n_pos * pos_neg_ratio)
+    if n_neg_needed > len(neg_samples):
+        raise ValueError(f"所需负样本数量 {n_neg_needed} 超过了提供的 {len(neg_samples)} 个负样本。")
+
+    neg_samples = neg_samples.sample(n=n_neg_needed, random_state=random_state)
+    balanced_data = pd.concat([pos_samples, neg_samples], axis=0).sample(frac=1, random_state=random_state).reset_index(drop=True)
+
+    # Step 2: 构建基因集合
+    all_genes = set(balanced_data['gene_1']) | set(balanced_data['gene_2'])
+    all_genes = list(all_genes)
+
+    # Step 3: 尝试构造满足约束的 test_df
+    np.random.shuffle(all_genes)
+    gene_pool = set(all_genes)
+    test_gene_candidates = []
+
+    # 用贪心方式选取 test genes，使得可以构建测试集满足条件
+    for gene in all_genes:
+        # 计算如果加入该 gene，会不会产生有两个 test_gene 的配对（不允许）
+        temp_test_genes = set(test_gene_candidates + [gene])
+        def would_be_valid(row):
+            g1 = row['gene_1']
+            g2 = row['gene_2']
+            in1 = g1 in temp_test_genes
+            in2 = g2 in temp_test_genes
+            return (in1 + in2) <= 1  # 至多一个在测试集中
+
+        valid_rows = balanced_data[balanced_data.apply(would_be_valid, axis=1)]
+        if len(valid_rows) >= int(len(balanced_data) * test_ratio):
+            test_gene_candidates.append(gene)
+        if len(test_gene_candidates) >= int(len(all_genes) * test_ratio):
+            break
+
+    test_genes = set(test_gene_candidates)
+
+    def is_test_pair(row):
+        g1_in = row['gene_1'] in test_genes
+        g2_in = row['gene_2'] in test_genes
+        return g1_in ^ g2_in  # XOR：只允许一个基因在 test_genes 中
+
+    test_df = balanced_data[balanced_data.apply(is_test_pair, axis=1)]
+    train_val_df = balanced_data.drop(test_df.index).reset_index(drop=True)
+    test_df = test_df.reset_index(drop=True)
+
+    # Step 4: 从 train_val 中再划分 val 集
+    y_trainval = train_val_df['SL_or_not']
+    train_idx, val_idx = train_test_split(
+        train_val_df.index,
+        stratify=y_trainval,
+        test_size=val_ratio_within_train,
+        random_state=random_state
+    )
+
+    train_df = train_val_df.loc[train_idx].reset_index(drop=True)
+    val_df = train_val_df.loc[val_idx].reset_index(drop=True)
+
+    # Step 5: 打印结果统计
+    def count_pos_neg(df, name):
+        pos = (df['SL_or_not'] == 1).sum()
+        neg = (df['SL_or_not'] == 0).sum()
+        print(f"{name}: pos={pos}, neg={neg}, ratio={neg/pos:.2f}")
+
+    print(f"共有基因对样本: {len(balanced_data)}")
+    count_pos_neg(train_df, "Train")
+    count_pos_neg(val_df, "Val")
+    count_pos_neg(test_df, "Test")
+    print(f"Train genes: {len(set(train_df['gene_1']) | set(train_df['gene_2']))}")
+    print(f"Test genes: {len(test_genes)}")
+
+    return train_df, val_df, test_df
 
 import pandas as pd
 import numpy as np

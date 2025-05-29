@@ -1,8 +1,8 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
 from data_preprocess import preprocess_data, generate_sl_cv_splits, get_ppi_graph_tot, report_coverage
 from sklearn.model_selection import train_test_split
-from dataset import SLDataset
-from model import TwoGCN_SLClassifier
+from dataset_single import SLDataset
+from model_single import TwoGCN_SLClassifier
 import pandas as pd
 import torch
 import torch.nn as nn

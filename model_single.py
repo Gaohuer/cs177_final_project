@@ -3,22 +3,63 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 
+# class TwoGCN_SLClassifier(nn.Module):
+#     def __init__(self, node_feat_dim, scg_dim, genePT_dim, esm_dim, hidden_dim=512, out_dim=512):
+#         super().__init__()
+#         # 图神经网络部分：两层 GCN
+#         self.gcn1 = GCNConv(node_feat_dim, hidden_dim)
+#         self.gcn2 = GCNConv(hidden_dim, out_dim)
+#         self.gcn_out_dim = out_dim
+
+#         # MLP 分类器输入：两个节点的GCN输出 + scg_pair
+#         input_dim = 2*out_dim + 2*scg_dim + 2 * genePT_dim + 2*esm_dim
+#         # input_dim = 2 * scg_dim + 2* 1536
+#         self.classifier = nn.Sequential(
+#             nn.Linear(input_dim, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, 64),
+#             nn.ReLU(),
+#             nn.Linear(64, 2)  # 二分类
+#         )
+
+#     def forward(self, graph_data, scg_pair, gpt_pair, esm_pair, pair_idx):
+#         """
+#         data: 一个 torch_geometric.data.Data 图对象
+#         sample_batch: dict, 来自 Dataset，包含 pair_idx、scg_pair 等
+#         """
+#         x, edge_index = graph_data.x, graph_data.edge_index
+#         x = F.relu(self.gcn1(x, edge_index))
+#         x = self.gcn2(x, edge_index)  # shape: [num_nodes, out_dim]
+
+#         node_emb_1 = x[pair_idx[:,0]]
+#         node_emb_2 = x[pair_idx[:,1]]
+#         gcn_pair = torch.cat([node_emb_1, node_emb_2], dim=-1)  # shape: [2*out_dim]
+  
+#         full_input = torch.cat([gcn_pair, scg_pair, esm_pair, gpt_pair], dim=-1)
+#         logits = self.classifier(full_input)
+#         # logits = self.classifier(scg_pair)
+#         # full_input = torch.cat([gpt_pair, scg_pair], dim=-1)
+#         # logits = self.classifier(full_input)
+#         return logits
+
 class TwoGCN_SLClassifier(nn.Module):
-    def __init__(self, node_feat_dim, scg_dim, genePT_dim, esm_dim, hidden_dim=512, out_dim=512):
+    def __init__(self, node_feat_dim, scg_dim, genePT_dim, esm_dim, hidden_dim=512, out_dim=512, dropout_rate=0.3):
         super().__init__()
         # 图神经网络部分：两层 GCN
         self.gcn1 = GCNConv(node_feat_dim, hidden_dim)
         self.gcn2 = GCNConv(hidden_dim, out_dim)
+        self.gcn_dropout = nn.Dropout(dropout_rate)  # GCN层后的dropout
         self.gcn_out_dim = out_dim
 
         # MLP 分类器输入：两个节点的GCN输出 + scg_pair
         input_dim = 2*out_dim + 2*scg_dim + 2 * genePT_dim + 2*esm_dim
-        # input_dim = 2 * scg_dim + 2* 1536
         self.classifier = nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
+            nn.Dropout(dropout_rate),  # 第一个全连接层后的dropout
             nn.Linear(128, 64),
             nn.ReLU(),
+            nn.Dropout(dropout_rate),  # 第二个全连接层后的dropout
             nn.Linear(64, 2)  # 二分类
         )
 
@@ -30,6 +71,7 @@ class TwoGCN_SLClassifier(nn.Module):
         x, edge_index = graph_data.x, graph_data.edge_index
         x = F.relu(self.gcn1(x, edge_index))
         x = self.gcn2(x, edge_index)  # shape: [num_nodes, out_dim]
+        x = self.gcn_dropout(x)  # 在GCN输出后应用dropout
 
         node_emb_1 = x[pair_idx[:,0]]
         node_emb_2 = x[pair_idx[:,1]]
@@ -37,9 +79,6 @@ class TwoGCN_SLClassifier(nn.Module):
   
         full_input = torch.cat([gcn_pair, scg_pair, esm_pair, gpt_pair], dim=-1)
         logits = self.classifier(full_input)
-        # logits = self.classifier(scg_pair)
-        # full_input = torch.cat([gpt_pair, scg_pair], dim=-1)
-        # logits = self.classifier(full_input)
         return logits
 
 import torch

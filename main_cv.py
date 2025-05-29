@@ -1,6 +1,6 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
 from data_preprocess_single import preprocess_data, generate_sl_splits, get_ppi_graph_tot, report_coverage
-from data_preprocess_single import generate_sl_split_cv2, generate_sl_split_cv3, generate_sl_split_cv3_new
+from data_preprocess_single import generate_sl_split_cv2, generate_sl_split_cv3, generate_sl_split_cv3_new, generate_sl_split_cv2_new
 from dataset_single import SLDataset, get_sub_graph
 from model_single import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
@@ -126,7 +126,7 @@ def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=Non
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
-    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "RPE1", "A549"],
+    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
                         help="Cell line name for SL data.")
     parser.add_argument("--ratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
     parser.add_argument("--epochs", type=int, default=70, help="Number of training epochs.")
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     # sl_balanced, cv_splits = generate_sl_cv_splits(sl_data, pos_neg_ratio=ratio)
     # cv_splits = generate_sl_splits_new(sl_data, train_ratio=train_ratio, val_ratio=train_ratio, test_ratio=test_ratio)
     if cv == 2:
-        train_df, val_df, test_df = generate_sl_split_cv2(sl_data, pos_neg_ratio=ratio, test_ratio=0.2)
+        train_df, val_df, test_df = generate_sl_split_cv2_new(sl_data, pos_neg_ratio=ratio, test_ratio=0.2)
     elif cv == 3:
         # train_df, val_df, test_df = generate_sl_split_cv3(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
         train_df, val_df, test_df = generate_sl_split_cv3_new(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)

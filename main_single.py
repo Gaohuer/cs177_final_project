@@ -126,10 +126,10 @@ def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=Non
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
-    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "RPE1", "A549"],
+    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
                         help="Cell line name for SL data.")
     parser.add_argument("--trainratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
-    parser.add_argument("--testratio", type=float, default=5.0, help="Weight ratio for positive class in loss function.")
+    parser.add_argument("--testratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
     parser.add_argument("--epochs", type=int, default=70, help="Number of training epochs.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--patience", type=int, default=10, help="Patience for early stopping.")
