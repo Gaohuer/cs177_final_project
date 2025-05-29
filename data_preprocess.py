@@ -18,7 +18,7 @@ def preprocess_data(sl_data, cell_line):
     为sl_data去除不需要的项，添加对应的id
     output: sl_data
     '''
-    sl_data = sl_data[['gene_1','gene_2','SL_or_not']]
+    sl_data = sl_data[['gene_1','gene_2','SL_or_not']].copy()
     sl_data['cell_line'] = cell_line
     # scg_embedding
     ppi_df = pd.read_csv('./data/gene_ppi_index_mapping.csv')
@@ -45,13 +45,13 @@ def preprocess_data(sl_data, cell_line):
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-def generate_sl_splits_new(data, 
-                          train_ratio=1, 
-                          val_ratio=1, 
-                          test_ratio=5, 
-                          random_state=42, 
-                          n_splits=5, 
-                          train_val_ratio=0.8):
+def generate_sl_splits(data, 
+                        train_ratio=1, 
+                        val_ratio=1, 
+                        test_ratio=5, 
+                        random_state=42, 
+                        n_splits=5, 
+                        train_val_ratio=0.8):
     '''
     input:
         data: dataframe, must contain 'SL_or_not' column with 0/1
@@ -519,3 +519,70 @@ def report_coverage(sl_data):
         geneformer_dict = pickle.load(f)
     geneformer_covered = sum(gene in geneformer_dict for gene in all_genes)
     print(f"• Geneformer: {geneformer_covered/total_genes:.1%} ({geneformer_covered}/{total_genes})")
+
+
+
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+def generate_sl_split_wo_fold(data,
+                                 train_ratio=1,
+                                 test_ratio=1,
+                                 train_test_split_ratio=0.8,
+                                 random_state=42):
+    """
+    将 SL 数据集划分为训练集和测试集，并根据指定正负样本比例进行采样。
+
+    参数：
+        data: DataFrame，包含 'SL_or_not' 列
+        train_ratio: float，训练集中负:正样本比例
+        test_ratio: float，测试集中负:正样本比例
+        train_test_split_ratio: float，训练集占总数据中正样本的比例（默认 0.8）
+        random_state: int，随机种子
+
+    返回：
+        train_df, test_df: DataFrame
+    """
+    data = data.copy()
+    data['SL_or_not'] = data['SL_or_not'].astype(int)
+
+    # 拆分正负样本
+    pos_data = data[data['SL_or_not'] == 1]
+    neg_data = data[data['SL_or_not'] == 0]
+
+    # 拆分正样本 train/test
+    pos_train, pos_test = train_test_split(
+        pos_data, 
+        test_size=1 - train_test_split_ratio,
+        random_state=random_state, 
+        stratify=pos_data['SL_or_not']
+    )
+
+    # 采样负样本
+    num_neg_train = min(int(len(pos_train) * train_ratio), len(neg_data))
+    num_neg_test = min(int(len(pos_test) * test_ratio), len(neg_data) - num_neg_train)
+
+    neg_train = neg_data.sample(n=num_neg_train, random_state=random_state)
+    neg_remaining = neg_data.drop(neg_train.index)
+    neg_test = neg_remaining.sample(n=num_neg_test, random_state=random_state + 1)
+
+    # 拼接正负样本
+    train_df = pd.concat([pos_train, neg_train]).sample(frac=1, random_state=random_state).reset_index(drop=True)
+    test_df = pd.concat([pos_test, neg_test]).sample(frac=1, random_state=random_state).reset_index(drop=True)
+
+    # 打印比例
+    def count_pos_neg(df, name):
+        pos_count = (df['SL_or_not'] == 1).sum()
+        neg_count = (df['SL_or_not'] == 0).sum()
+        print(f"{name}: pos={pos_count}, neg={neg_count}, ratio={neg_count / pos_count:.2f}")
+
+    count_pos_neg(train_df, "Train")
+    count_pos_neg(test_df, "Test")
+
+    return train_df, test_df
+
+
+    return train_df, val_df, test_df

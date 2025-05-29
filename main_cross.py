@@ -1,10 +1,15 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-from data_preprocess_cross import preprocess_data, generate_sl_cv_splits, get_ppi_graph_tot, report_coverage
-from sklearn.model_selection import train_test_split
-from dataset_single import SLDataset
-from model_single import TwoGCN_SLClassifier
+from data_preprocess import preprocess_data, get_ppi_graph_tot_expr, report_coverage
+from data_preprocess import generate_sl_split_wo_fold
+from dataset import SLDataset
+from model import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
 import torch
+from torch.utils.data import Dataset
+from torch_geometric.data import Data as GeometricData
+from torch_geometric.data import Data
+from torch.utils.data import DataLoader
+import torch.optim as optim
 import torch.nn as nn
 import argparse
 import numpy as np
@@ -12,28 +17,61 @@ import argparse
 import json
 import os
 from datetime import datetime
-import pickle
-from tqdm import tqdm
+import random
 
 
-def evaluate(model, val_loader, ppi_graph_tot=None, ppi_df=None, device='cpu'):
+
+
+# def evaluate(model, val_loader, ppi_graph_tot=None, ppi_df=None, device='cpu'):
+def evaluate(model, cellline_datasets, device='cpu'):
     model.eval()
     all_labels = []
     all_preds = []
     all_probs = []
 
     with torch.no_grad():
-        for item in val_loader:
+        for cl in cellline_datasets:
+            val_loader = cellline_datasets[cl]["val_loader"]
+            ppi_graph = cellline_datasets[cl]["ppi_graph"].to(device)
+            for item in val_loader:
+                scg_pair = item["scg_pair"].to(device)
+                gpt_pair = item["gpt_pair"].to(device)
+                esm_pair = item["esm_pair"].to(device)
+                pair_idx = item["pair_idx"].to(device)
+                labels = item["label"].to(device)
+
+                graph_data = ppi_graph.to(device)
+
+                outputs = model(graph_data, scg_pair, gpt_pair, esm_pair, pair_idx)
+                probs = torch.softmax(outputs, dim=1)[:, 1]  # positive class probability
+                preds = outputs.argmax(dim=1)
+
+                all_labels.extend(labels.cpu().numpy())
+                all_preds.extend(preds.cpu().numpy())
+                all_probs.extend(probs.cpu().numpy())
+
+    auc = roc_auc_score(all_labels, all_probs)
+    aupr = average_precision_score(all_labels, all_probs)
+    f1 = f1_score(all_labels, all_preds)
+
+    return auc, aupr, f1
+
+
+def evaluate_test(model, test_loader, ppi_graph, device='cpu'):
+    model.eval()
+    all_labels = []
+    all_preds = []
+    all_probs = []
+
+    with torch.no_grad():
+        for item in test_loader:
             scg_pair = item["scg_pair"].to(device)
             gpt_pair = item["gpt_pair"].to(device)
             esm_pair = item["esm_pair"].to(device)
             pair_idx = item["pair_idx"].to(device)
             labels = item["label"].to(device)
 
-            # graph_data = get_sub_graph(pair_idx, ppi_df)
-            # graph_data.x = graph_data.x.to(device)
-            # graph_data.edge_index = graph_data.edge_index.to(device)
-            graph_data = ppi_graph_tot.to(device)
+            graph_data = ppi_graph.to(device)
 
             outputs = model(graph_data, scg_pair, gpt_pair, esm_pair, pair_idx)
             probs = torch.softmax(outputs, dim=1)[:, 1]  # positive class probability
@@ -50,8 +88,10 @@ def evaluate(model, val_loader, ppi_graph_tot=None, ppi_df=None, device='cpu'):
     return auc, aupr, f1
 
 
-def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=None, device='cpu',
-          epochs=10, lr=1e-3, patience=5):
+# def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=None, device='cpu',
+#           epochs=10, lr=1e-3, patience=5):
+    
+def train(ratio, model, cellline_datasets, device='cpu', epochs=10, lr=1e-4, patience=5):
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -66,263 +106,173 @@ def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=Non
     best_model_state = None
     patience_counter = 0
 
-    
-
     for epoch in range(epochs):
         model.train()
         total_loss, correct, total = 0, 0, 0
+        cell_lines = list(cellline_datasets.keys())
+        random.shuffle(cell_lines)
 
-        progress_bar = tqdm(train_loader, 
-                          desc=f"Epoch {epoch+1}/{epochs}",
-                          bar_format="{l_bar}{bar:20}{r_bar}{bar:-20b}")
+        for cl in cell_lines:
+            train_loader = cellline_datasets[cl]["train_loader"]
+            ppi_graph = cellline_datasets[cl]["ppi_graph"].to(device)
+            for item in train_loader:
+                scg_pair = item["scg_pair"].to(device)
+                gpt_pair = item["gpt_pair"].to(device)
+                esm_pair = item["esm_pair"].to(device)
+                pair_idx = item["pair_idx"].to(device)
+                labels = item["label"].to(device)
 
-        for item in progress_bar:
-            scg_pair = item["scg_pair"].to(device)
-            gpt_pair = item["gpt_pair"].to(device)
-            esm_pair = item["esm_pair"].to(device)
-            pair_idx = item["pair_idx"].to(device)
-            labels = item["label"].to(device)
+                graph_data = ppi_graph.to(device)
 
-            graph_data = ppi_graph_tot.to(device)
+                outputs = model(graph_data, scg_pair, gpt_pair, esm_pair, pair_idx)
 
-            outputs = model(graph_data, scg_pair, gpt_pair, esm_pair, pair_idx)
+                loss = criterion(outputs, labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-            loss = criterion(outputs, labels)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item()
-            preds = outputs.argmax(dim=1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
+                total_loss += loss.item()
+                preds = outputs.argmax(dim=1)
+                correct += (preds == labels).sum().item()
+                total += labels.size(0)
 
         acc = correct / total
-        tra_auc, tra_aupr, tra_f1 = evaluate(model, train_loader, ppi_graph_tot, ppi_df, device)
+        auc, aupr, f1 = evaluate(model, cellline_datasets, device)
 
-        progress_bar.set_postfix({
-                'loss': f"{loss.item():.4f}",
-                'acc': f"{correct/max(1,total):.2f}",
-                'lr': optimizer.param_groups[0]['lr']
-            })
-        
-        # 在每个epoch结束后添加以下代码
-        epoch_loss = total_loss / len(train_loader)
-        epoch_acc = correct / total
-        print(f"Train AUC: {tra_auc:.4f}, AUPR: {tra_aupr:.4f}, F1: {tra_f1:.4f}")
-
-        # 验证集评估
-        val_auc, val_aupr, val_f1 = evaluate(model, val_loader, ppi_graph_tot, ppi_df, device)
-        print(f"Valid AUC: {val_auc:.4f}, AUPR: {val_aupr:.4f}, F1: {val_f1:.4f}")
+        print(f"[Epoch {epoch+1}] Loss: {total_loss:.4f} | Train Acc: {acc:.4f} | "
+              f"Val AUC: {auc:.4f} | AUPR: {aupr:.4f} | F1: {f1:.4f}")
 
         if acc>=0.99:
+            print(f"Early stopping triggered at epoch {epoch+1}")
             break
 
         # Early stopping logic
-        if val_auc > best_auc:
-            best_auc = val_auc
+        if auc > best_auc:
+            best_auc = auc
             best_model_state = model.state_dict().copy()
             patience_counter = 0
         else:
             patience_counter += 1
             if patience_counter >= patience:
+                print(f"Early stopping triggered at epoch {epoch+1}")
                 break
         
-        scheduler.step(tra_auc)
+        scheduler.step(auc)
 
         # Restore best model
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
 
-def load_and_merge_data(traincells, testcell):
-    """加载并合并训练和测试细胞系数据"""
-    dfs = []
-    for cell in traincells:
-        df = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{cell}.csv")
-        df['cell_line'] = cell  # 标记来源
-        dfs.append(df)
-    # 加入测试集
-    test_df = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{testcell}.csv")
-    test_df['cell_line'] = testcell
-    dfs.append(test_df)
-    
-    merged_df = pd.concat(dfs, axis=0).reset_index(drop=True)
-    return merged_df
 
-def generate_split(data, pos_neg_ratio, target_cell=None, is_train=True):
-    """生成指定细胞系的平衡数据集"""
-    if target_cell:  # 分离特定细胞系
-        target_data = data[data['cell_line'] == target_cell].copy()
-        other_data = data[data['cell_line'] != target_cell].copy()
-    else:
-        target_data = data.copy()
 
-    pos_samples = target_data[target_data['SL_or_not'] == 1]
-    neg_samples = target_data[target_data['SL_or_not'] == 0]
-    
-    # 计算需要采样的负样本数
-    n_pos = len(pos_samples)
-    n_neg = int(n_pos * pos_neg_ratio)
-    if n_neg > len(neg_samples):
-        if is_train:  # 训练集允许重复
-            neg_sampled = neg_samples.sample(n=n_neg, replace=True, random_state=42)
-        else:         # 测试集不重复
-            neg_sampled = neg_samples.sample(n=min(n_neg, len(neg_samples)), random_state=42)
-    else:
-        neg_sampled = neg_samples.sample(n=n_neg, random_state=42)
-    
-    balanced = pd.concat([pos_samples, neg_sampled])
-    return balanced.sample(frac=1, random_state=42).reset_index(drop=True)
-
-def report_cell_line_coverage(data, cell_lines, name="Dataset"):
-    """统计指定细胞系的基因覆盖率"""
-    # 过滤指定细胞系的数据
-    subset = data[data['cell_line'].isin(cell_lines)]
-    
-    # 获取所有唯一基因
-    all_genes = pd.unique(subset[['gene_1', 'gene_2']].values.ravel('K'))
-    total_genes = len(all_genes)
-    print(f"\n{name} 基因覆盖统计（细胞系: {cell_lines}，共 {total_genes} 个唯一基因）:")
-
-    # 各嵌入方法的覆盖率检查
-    embedding_files = {
-        'scGPT': ('./data/scgpt_gene2idx.txt', 'gene_name'),
-        'GenePT': ('./data/GenePT_emebdding_v2/GenePT_gene_embedding_pca512.pickle', 'gene_name'),
-        'ESM': ('./data/esm_embeddings/gene_esm_embeddings_pca256.pkl', 'gene'),
-        'Geneformer': ('./data/geneformer_gene_embs_pca128.pkl', 'gene')
-    }
-
-    for emb_name, (path, key) in embedding_files.items():
-        if emb_name == 'scGPT':
-            df = pd.read_csv(path, sep='\t', names=['gene_name', 'idx'])
-            covered = sum(gene in df['gene_name'].values for gene in all_genes)
-        else:
-            with open(path, 'rb') as f:
-                emb_dict = pickle.load(f)
-            covered = sum(gene in emb_dict for gene in all_genes)
-        print(f"• {emb_name}: {covered/total_genes:.1%} ({covered}/{total_genes})")
 
 if __name__ == "__main__":
-    # 修改参数解析
-    parser = argparse.ArgumentParser(description="跨细胞系合成致死预测训练")
-    parser.add_argument("--traincells", nargs='+', default=["JURKAT"], 
-                      choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
-                      help="训练细胞系列表")
-    parser.add_argument("--testcell", type=str, default="K562",
-                      choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
-                      help="测试细胞系")
-    parser.add_argument("--train_ratio", type=float, default=1.0,
-                      help="训练集正负样本比例")
-    parser.add_argument("--test_ratio", type=float, default=1.0,
-                      help="测试集正负样本比例")
-    parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--patience", type=int, default=10)
+    parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
+    parser.add_argument('--train_cell_lines', nargs='+', default=["PK1", "A549", "K562"],
+                        help="List of cell lines for training, e.g. --train_cell_lines PK1 A549 K562")
+    parser.add_argument('--test_cell_line', type=str, default="JURKAT",
+                        help="Target cell line for testing, e.g. --test_cell_line JURKAT")
+    parser.add_argument("--trainratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
+    parser.add_argument("--testratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
+    parser.add_argument("--epochs", type=int, default=70, help="Number of training epochs.")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
+    parser.add_argument("--patience", type=int, default=10, help="Patience for early stopping.")
+
     args = parser.parse_args()
+    print(args)
 
-    # 打印训练配置
-    print("\n=== 训练配置 ===")
-    print(f"训练细胞系: {args.traincells}")
-    print(f"测试细胞系: {args.testcell}")
-    print(f"正负样本比 | 训练: 1 :  {args.train_ratio} | 测试: 1 : {args.test_ratio} ")
-    print(f"超参数 | lr: {args.lr} | batch: {args.batch_size} | epochs: {args.epochs}")
-    
-    # 打印嵌入配置
-    print("\n=== 使用的基因嵌入 ===")
-    embeddings = {
-        'scGPT': 'scgpt_emb.pkl (512D)',
-        'GenePT': 'GenePT_gene_embedding_pca512.pickle',
-        'ESM': 'gene_esm_embeddings_pca256.pkl',
-        'Geneformer': 'geneformer_gene_embs_pca128.pkl'
-    }
-    for name, desc in embeddings.items():
-        print(f"• {name}: {desc}")
-    
-    same_cell = (len(args.traincells) == 1) and (args.traincells[0] == args.testcell)
+    # train_ratio = args.trainratio
+    # test_ratio = args.testratio
+    # epochs = args.epochs
+    # lr = args.lr
+    # patience = args.patience
+    num_fold = 5
+    node_dim = 256
 
-    if same_cell:  
-        # 情况1：训练和测试是同一细胞系（如 JURKAT）
-        cell = args.traincells[0]
-        full_data = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{cell}.csv")
-        full_data = preprocess_data(full_data)  # 预处理
+    train_cell_line = args.train_cell_lines
+    test_cell_line = args.test_cell_line
+    epochs = args.epochs
+    lr = args.lr
+    train_ratio = args.trainratio
+    test_ratio = args.testratio
+    patience = args.patience
 
-        # 生成全局PPI图（包含所有细胞系的基因）
-        ppi_df = pd.read_csv('./data/9606_prot_link/ppi.csv')[['idx1','idx2','score']]
-        ppi_graph_tot = get_ppi_graph_tot(ppi_df, full_data, node_dim=256)
-        
-        # Step1: 先划分 train_val 和 test（确保测试集完全独立）
-        train_val_df, test_df = train_test_split(
-            full_data, 
-            test_size=0.2, 
-            stratify=full_data['SL_or_not'], 
-            random_state=42
-        )
-        
-        # Step2: 再划分 train 和 val
-        train_df, val_df = train_test_split(
-            train_val_df, 
-            test_size=0.2,  # 0.25 * 0.8 = 0.2 → train:0.6, val:0.2, test:0.2
-            stratify=train_val_df['SL_or_not'], 
-            random_state=42
-        )
-        
-        # 生成平衡数据集（仅在训练集上平衡）
-        train_df = generate_split(train_df, pos_neg_ratio=args.train_ratio)
-        val_df = generate_split(val_df, pos_neg_ratio=args.train_ratio)
-        test_df = generate_split(val_df, pos_neg_ratio=args.test_ratio)
-        
-    else:  
-        # 加载并合并数据
-        merged_data = load_and_merge_data(args.traincells, args.testcell)
-        report_cell_line_coverage(merged_data, args.traincells, "训练细胞系")
-        report_cell_line_coverage(merged_data, [args.testcell], "测试细胞系")
-        merged_data = preprocess_data(merged_data)
-        report_coverage(merged_data)  # 覆盖率检查
-        
-        # 生成全局PPI图（包含所有细胞系的基因）
-        ppi_df = pd.read_csv('./data/9606_prot_link/ppi.csv')[['idx1','idx2','score']]
-        ppi_graph_tot = get_ppi_graph_tot(ppi_df, merged_data, node_dim=256)
-        
-        # 划分训练测试集
-        train_df = generate_split(merged_data, args.train_ratio, target_cell=args.traincells[0])
-        train_df, val_df = train_test_split(train_df, test_size=0.2, stratify=train_df['SL_or_not'])
-        test_df = generate_split(merged_data, args.test_ratio, target_cell=args.testcell, is_train=False)
-    
-    # 创建数据集
-    train_dataset = SLDataset(train_df)
-    val_dataset = SLDataset(val_df)
-    test_dataset = SLDataset(test_df)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-    
-    # 训练与评估
+    ppi_df = pd.read_csv('./data/9606_prot_link/ppi.csv')[['idx1', 'idx2', 'score']]
+
+    cellline_datasets = {}  # 存储 dataloaders 和图
+    for name in train_cell_line:
+        print(f"Processing training cell line: {name}")
+        sl_data = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{name}.csv")
+        sl_data = preprocess_data(sl_data, name)
+        print(sl_data.head())
+        report_coverage(sl_data)
+
+        # generate 5 folds, but only use the data in the first fold
+        # cv_splits = generate_sl_splits_new(sl_data, train_ratio=1, val_ratio=1, test_ratio=1)
+        train_df, val_df = generate_sl_split_wo_fold(sl_data, train_ratio=train_ratio, test_ratio=train_ratio, train_test_split_ratio=0.8)
+                 
+        train_dataset = SLDataset(train_df, name)
+        val_dataset = SLDataset(val_df, name)
+        train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False)
+
+        ppi_graph = get_ppi_graph_tot_expr(ppi_df, sl_data, name, node_dim)
+
+        cellline_datasets[name] = {
+            "train_loader": train_loader,
+            "val_loader": val_loader,
+            "ppi_graph": ppi_graph
+        }
+
+    # test_cellline = "Z"
+    sl_data = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{test_cell_line}.csv")
+    sl_data = preprocess_data(sl_data, test_cell_line)
+    report_coverage(sl_data)
+    test_df, aaa = generate_sl_split_wo_fold(sl_data, train_ratio=test_ratio, test_ratio=test_ratio,  train_test_split_ratio=0.99)
+
+    ppi_df = pd.read_csv('./data/9606_prot_link/ppi.csv')[['idx1', 'idx2', 'score']]
+    ppi_graph_test = get_ppi_graph_tot_expr(ppi_df, sl_data, test_cell_line, node_dim)
+
+    test_dataset = SLDataset(test_df, test_cell_line)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model = TwoGCN_SLClassifier(
-        node_feat_dim=256, scg_dim=512, genePT_dim=512, esm_dim=256, 
+        node_feat_dim=node_dim,  # get_sub_graph 默认输出 node_dim=64
+        scg_dim=512,
+        genePT_dim=512,
+        esm_dim=256,
         hidden_dim=256, out_dim=256
-    ).to(device)
-    
-    train(args.train_ratio, model, train_loader, val_loader, ppi_graph_tot, 
-         ppi_df, device, epochs=args.epochs, lr=args.lr, patience=args.patience)
-    
-    # 最终测试
-    auc, aupr, f1 = evaluate(model, test_loader, ppi_graph_tot, ppi_df, device)
-    print(f"Test Results - AUC: {auc:.4f}, AUPR: {aupr:.4f}, F1: {f1:.4f}")
-    
-    # 保存结果
+    )
+    print("get model")
+        # train(model, train_loader, ppi_df, device, epochs=10, lr=1e-3)
+    train(train_ratio, model, cellline_datasets, device, epochs=epochs, lr=lr, patience=patience)
+    auc, aupr, f1 = evaluate_test(model, test_loader, ppi_graph_test, device)
+
+    print("test result: AUC:",auc, "AUPR:", aupr, "F1",f1)
+   
+
+    # # save as .json file
+    os.makedirs('./new_model_result/cross', exist_ok=True)
     result = {
-        "traincells": args.traincells,
-        "testcell": args.testcell,
-        "train_ratio": args.train_ratio,
-        "test_ratio": args.test_ratio,
-        "epochs": args.epochs,
-        "auc": auc,
-        "aupr": aupr,
-        "f1": f1
+        "train_cell_line": train_cell_line,
+        "test_cell_line": test_cell_line,
+        "train_ratio": train_ratio,
+        "test_ratio": test_ratio,
+        "epochs": epochs,
+        "lr": lr,
+        "patience": patience,
+        "test_auc": auc,
+        "test_aupr": aupr,
+        "test_f1": f1
     }
-    os.makedirs('./results', exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    with open(f'./results/crosscell_{"_".join(args.traincells)}_to_{args.testcell}_{timestamp}.json', 'w') as f:
-        json.dump(result, f)
+    json_path = os.path.join('./new_model_result/cross', f"result_{test_cell_line}_{timestamp}.json")
+    with open(json_path, "w") as f:
+        json.dump(result, f, indent=4)
+    print(f"Results saved to {json_path}")
+
+
+
+

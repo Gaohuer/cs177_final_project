@@ -1,8 +1,8 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-from data_preprocess_single import preprocess_data, get_ppi_graph_tot_expr, report_coverage
-from data_preprocess_single import generate_sl_splits_new
-from dataset_single import SLDataset
-from model_single import TwoGCN_SLClassifier,  FocalLoss
+from data_preprocess import preprocess_data, get_ppi_graph_tot_expr, report_coverage
+from data_preprocess import generate_sl_splits
+from dataset import SLDataset
+from model import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     report_coverage(sl_data)
     print(sl_data.head())
     # sl_balanced, cv_splits = generate_sl_cv_splits(sl_data, pos_neg_ratio=ratio)
-    cv_splits = generate_sl_splits_new(sl_data, train_ratio=train_ratio, val_ratio=train_ratio, test_ratio=test_ratio)
+    cv_splits = generate_sl_splits(sl_data, train_ratio=train_ratio, val_ratio=train_ratio, test_ratio=test_ratio)
 
     # print(sl_balanced.head())
     # print("num_of_fold:", len(cv_splits))

@@ -1,8 +1,8 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-from data_preprocess_single import preprocess_data, get_ppi_graph_tot_expr, report_coverage
-from data_preprocess_single import generate_sl_split_cv3_new, generate_sl_split_cv2_new, generate_sl_split_cv3
-from dataset_single import SLDataset
-from model_single import TwoGCN_SLClassifier,  FocalLoss
+from data_preprocess import preprocess_data, get_ppi_graph_tot_expr, report_coverage
+from data_preprocess import generate_sl_split_cv3_new, generate_sl_split_cv2_new, generate_sl_split_cv3
+from dataset import SLDataset
+from model import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
