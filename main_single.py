@@ -1,7 +1,7 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-from data_preprocess_single import preprocess_data, generate_sl_splits, get_ppi_graph_tot, report_coverage
+from data_preprocess_single import preprocess_data, get_ppi_graph_tot_expr, report_coverage
 from data_preprocess_single import generate_sl_splits_new
-from dataset_single import SLDataset, get_sub_graph
+from dataset_single import SLDataset
 from model_single import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
 import torch
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     ppi_df = ppi_df[['idx1','idx2','score']]
     # print(ppi_df.head())
     node_dim = 256
-    ppi_graph_tot = get_ppi_graph_tot(ppi_df, sl_data, node_dim)
+    ppi_graph_tot = get_ppi_graph_tot_expr(ppi_df, sl_data,cellline_name, node_dim)
     print("finish_transition:", ppi_graph_tot)
 
     # 这段可以用来调试dataset部分的结果
@@ -189,11 +189,11 @@ if __name__ == "__main__":
     AUPR = []
     F1 = []
     for i in range(num_fold):
-        train_dataset = SLDataset(cv_splits[i][0])
+        train_dataset = SLDataset(cv_splits[i][0], cellline_name)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True)
-        val_dataset = SLDataset(cv_splits[i][1])
+        val_dataset = SLDataset(cv_splits[i][1], cellline_name)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=128, shuffle=False)
-        test_dataset = SLDataset(cv_splits[i][2])
+        test_dataset = SLDataset(cv_splits[i][2], cellline_name)
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     print(f"AUC:{auc_final}, AUPR:{aupr_final}, F1:{f1_final}")
 
     # save as .json file
-    os.makedirs('./result', exist_ok=True)
+    os.makedirs('./new_model_result/cv1', exist_ok=True)
     result = {
         "cellline_name": cellline_name,
         "train_ratio": train_ratio,
@@ -231,7 +231,7 @@ if __name__ == "__main__":
         "test_f1": f1_final
     }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    json_path = os.path.join('./result', f"result_{cellline_name}_{timestamp}.json")
+    json_path = os.path.join('./new_model_result/cv1', f"result_{cellline_name}_{timestamp}.json")
     with open(json_path, "w") as f:
         json.dump(result, f, indent=4)
     print(f"Results saved to {json_path}")

@@ -1,5 +1,5 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-from data_preprocess import preprocess_data, generate_sl_cv_splits, get_ppi_graph_tot, report_coverage
+from data_preprocess_cross import preprocess_data, generate_sl_cv_splits, get_ppi_graph_tot, report_coverage
 from sklearn.model_selection import train_test_split
 from dataset_single import SLDataset
 from model_single import TwoGCN_SLClassifier
@@ -206,10 +206,10 @@ if __name__ == "__main__":
     # 修改参数解析
     parser = argparse.ArgumentParser(description="跨细胞系合成致死预测训练")
     parser.add_argument("--traincells", nargs='+', default=["JURKAT"], 
-                      choices=["JURKAT", "K562", "RPE1", "A549"],
+                      choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
                       help="训练细胞系列表")
     parser.add_argument("--testcell", type=str, default="K562",
-                      choices=["JURKAT", "K562", "RPE1", "A549"],
+                      choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
                       help="测试细胞系")
     parser.add_argument("--train_ratio", type=float, default=1.0,
                       help="训练集正负样本比例")

@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 from torch_geometric.data import Data as GeometricData
 
+# from data_preprocess_single import get_ppi_graph_tot_new
+
 
 def get_scg_emb(scg_idx, dict, dim):
     if pd.isna(scg_idx):
@@ -27,7 +29,7 @@ def get_prot_seq(protid, dict):
 
 
 class SLDataset(Dataset):
-    def __init__(self, sl_data, scg_emb_path="./data/scgpt_emb.pkl"):
+    def __init__(self,sl_data, cell_line, scg_emb_path="./data/scgpt_emb.pkl"):
 
         with open("./data/scgpt_emb.pkl", "rb") as f:
             scg_dict = pickle.load(f)
@@ -94,6 +96,9 @@ class SLDataset(Dataset):
         self.ppi_pair_idx = torch.tensor(np.array(self.ppi_pair_idx), dtype=torch.long)
         # add esm embs
         self.labels = torch.tensor(np.array(self.labels), dtype=torch.long)
+
+        # self.ppi_graph = ppi_graph
+        self.cell_line = cell_line
     
     def get_esm_emb(self, gene_name):
         return self.esm_dict.get(gene_name, np.zeros(self.esm_dim))
@@ -118,51 +123,52 @@ class SLDataset(Dataset):
             "gpt_pair": gpt_pair,
             "esm_pair": esm_pair,
             "pair_idx": pair_idx,
-            "label": label,
+            "label": label
+            # "ppi_graph":self.ppi_graph
         }
     
 
-def get_sub_graph(ppi_pair_idx, ppi_df, num_node=6135, node_dim=64):
-    # 加载scGPT嵌入字典
-    with open("./data/geneformer_gene_embs_pca64", "rb") as f:
-        geneformer_dict = pickle.load(f)
+# def get_sub_graph(ppi_pair_idx, ppi_df, num_node=6135, node_dim=64):
+#     # 加载scGPT嵌入字典
+#     with open("./data/geneformer_gene_embs_pca64", "rb") as f:
+#         geneformer_dict = pickle.load(f)
 
-    ppi_genes = pd.read_csv('./data/gene_ppi_index_mapping.csv')['gene'].unique()
-    print(f"PPI网络总基因数: {len(ppi_genes)}")
-    covered = sum(gene in geneformer_dict for gene in ppi_genes)
-    coverage = covered / len(ppi_genes)
+#     ppi_genes = pd.read_csv('./data/gene_ppi_index_mapping.csv')['gene'].unique()
+#     print(f"PPI网络总基因数: {len(ppi_genes)}")
+#     covered = sum(gene in geneformer_dict for gene in ppi_genes)
+#     coverage = covered / len(ppi_genes)
 
-    print(f"覆盖基因数: {covered}")
-    print(f"覆盖率: {coverage:.1%}")
+#     print(f"覆盖基因数: {covered}")
+#     print(f"覆盖率: {coverage:.1%}")
 
     
-    # 计算均值嵌入
-    all_embs = [emb for emb in geneformer_dict.values()]
-    mean_emb = np.mean(all_embs, axis=0) if all_embs else np.zeros_like(next(iter(geneformer_dict.values())))
-    scg_dim = mean_emb.shape[0]
+#     # 计算均值嵌入
+#     all_embs = [emb for emb in geneformer_dict.values()]
+#     mean_emb = np.mean(all_embs, axis=0) if all_embs else np.zeros_like(next(iter(geneformer_dict.values())))
+#     scg_dim = mean_emb.shape[0]
     
-    # 初始化节点特征矩阵
-    node_feature = np.zeros((num_node, scg_dim))
-    for idx in range(num_node):
-        if idx in geneformer_dict:
-            node_feature[idx] = geneformer_dict[idx]
-        else:
-            node_feature[idx] = mean_emb
+#     # 初始化节点特征矩阵
+#     node_feature = np.zeros((num_node, scg_dim))
+#     for idx in range(num_node):
+#         if idx in geneformer_dict:
+#             node_feature[idx] = geneformer_dict[idx]
+#         else:
+#             node_feature[idx] = mean_emb
     
-    # 转换为tensor
-    node_feature = torch.tensor(node_feature, dtype=torch.float32)
+#     # 转换为tensor
+#     node_feature = torch.tensor(node_feature, dtype=torch.float32)
     
-    # 获取子图边索引
-    nodes_in_pair = {int(idx) for pair in ppi_pair_idx for idx in pair}
-    sub_ppi_df = ppi_df[
-        ppi_df['idx1'].isin(nodes_in_pair) & 
-        ppi_df['idx2'].isin(nodes_in_pair)
-    ]
-    edge_index = torch.tensor([
-        sub_ppi_df['idx1'].tolist(),
-        sub_ppi_df['idx2'].tolist()
-    ], dtype=torch.long)
+#     # 获取子图边索引
+#     nodes_in_pair = {int(idx) for pair in ppi_pair_idx for idx in pair}
+#     sub_ppi_df = ppi_df[
+#         ppi_df['idx1'].isin(nodes_in_pair) & 
+#         ppi_df['idx2'].isin(nodes_in_pair)
+#     ]
+#     edge_index = torch.tensor([
+#         sub_ppi_df['idx1'].tolist(),
+#         sub_ppi_df['idx2'].tolist()
+#     ], dtype=torch.long)
     
-    return GeometricData(x=node_feature, edge_index=edge_index)
+#     return GeometricData(x=node_feature, edge_index=edge_index)
 
     

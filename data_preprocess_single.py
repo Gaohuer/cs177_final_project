@@ -41,56 +41,6 @@ def preprocess_data(sl_data, cell_line):
     return sl_data
 
 
-def generate_sl_splits(data, pos_neg_ratio=10, random_state=42, n_splits=5, train_val_ratio = 0.8):
-    '''
-    input: sl_data,
-            pos_neg_ratio = 10,
-            n_split = 5,
-            train_val_ratio = 0.8,
-    output: balanced_data: (sl_data with ratio),
-            folds:[[train_df, val_df, test_df]*5] same structure as sl_data
-    '''
-    data = data.copy()
-    data['SL_or_not'] = data['SL_or_not'].astype(int)
-
-    pos_samples = data[data['SL_or_not'] == 1]
-    neg_samples = data[data['SL_or_not'] == 0]
-    n_pos = len(pos_samples)
-    n_neg_needed = int(n_pos * pos_neg_ratio)
-
-    print("n_pos=",n_pos,";n_neg=",len(neg_samples),";neg_needed=",n_neg_needed)
-    if n_neg_needed > len(neg_samples):
-        raise ValueError(f"所需负样本数量 {n_neg_needed} 超过了提供的 {len(neg_samples)} 个负样本。")
-
-    neg_samples = neg_samples.sample(n=n_neg_needed, random_state=random_state)
-    balanced_data = pd.concat([pos_samples, neg_samples], axis=0).sample(frac=1, random_state=random_state).reset_index(drop=True)
-
-    # 获取特征和标签
-    X = balanced_data.drop(columns=['SL_or_not'])
-    y = balanced_data['SL_or_not'].values
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    folds = []
-    for train_idx, test_idx in skf.split(X, y):
-        train_val_df = balanced_data.iloc[train_idx].reset_index(drop=True)
-        test_df = balanced_data.iloc[test_idx].reset_index(drop=True)
-
-        # X_trainval = train_val_df.drop(columns=['SL_or_not'])
-        y_trainval = train_val_df['SL_or_not']
-        train_sub_idx, val_sub_idx = train_test_split(
-            train_val_df.index,
-            stratify=y_trainval,
-            test_size=1 - train_val_ratio,
-            random_state=random_state
-        )
-
-        train_df = train_val_df.loc[train_sub_idx].reset_index(drop=True)
-        val_df = train_val_df.loc[val_sub_idx].reset_index(drop=True)
-        folds.append((train_df, val_df, test_df))
-
-    print("num_of_fold:", len(folds))
-    print("num_tain:", folds[0][0].shape[0],";num_val:", folds[0][1].shape[0], ";num_test:", folds[0][2].shape[0])
-    return balanced_data, folds
-
 
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -176,83 +126,6 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-def generate_sl_split_cv2(
-    data,
-    pos_neg_ratio=5,
-    test_ratio=0.2,
-    val_ratio_within_train=0.2,
-    random_state=42
-):
-    '''
-    分割数据为 train/val/test，其中 test 中的基因对最多一个基因出现在 train_val 中。
-    
-    参数：
-        data: 原始 dataframe，包含列 ['gene1', 'gene2', 'SL_or_not']
-        pos_neg_ratio: 训练数据中正负样本比
-        test_ratio: 测试集比例（占全数据）
-        val_ratio_within_train: 验证集占训练集+验证集的比例
-        random_state: 随机种子
-    
-    返回：
-        train_df, val_df, test_df
-    '''
-    np.random.seed(random_state)
-    data = data.copy()
-    data['SL_or_not'] = data['SL_or_not'].astype(int)
-
-    # Step 1: 平衡正负样本
-    pos_samples = data[data['SL_or_not'] == 1]
-    neg_samples = data[data['SL_or_not'] == 0]
-
-    n_pos = len(pos_samples)
-    n_neg_needed = int(n_pos * pos_neg_ratio)
-    if n_neg_needed > len(neg_samples):
-        raise ValueError(f"所需负样本数量 {n_neg_needed} 超过了提供的 {len(neg_samples)} 个负样本。")
-
-    neg_samples = neg_samples.sample(n=n_neg_needed, random_state=random_state)
-    balanced_data = pd.concat([pos_samples, neg_samples], axis=0).sample(frac=1, random_state=random_state).reset_index(drop=True)
-
-    # Step 2: 构建基因集合
-    all_genes = set(balanced_data['gene_1']) | set(balanced_data['gene_2'])
-
-    # Step 3: 随机划分基因集合为 test_genes（用于构造测试集）
-    test_genes = set(np.random.choice(list(all_genes), size=int(len(all_genes) * test_ratio), replace=False))
-
-    def is_test_pair(row):
-        g1_in = row['gene_1'] in test_genes
-        g2_in = row['gene_2'] in test_genes
-        return g1_in ^ g2_in  # XOR：只允许一个基因在 test_genes 中
-
-    test_df = balanced_data[balanced_data.apply(is_test_pair, axis=1)]
-    train_val_df = balanced_data.drop(test_df.index).reset_index(drop=True)
-    test_df = test_df.reset_index(drop=True)
-
-    # Step 4: 从 train_val 中再划分 val 集
-    y_trainval = train_val_df['SL_or_not']
-    train_idx, val_idx = train_test_split(
-        train_val_df.index,
-        stratify=y_trainval,
-        test_size=val_ratio_within_train,
-        random_state=random_state
-    )
-
-    train_df = train_val_df.loc[train_idx].reset_index(drop=True)
-    val_df = train_val_df.loc[val_idx].reset_index(drop=True)
-
-    # Step 5: 打印结果统计
-    def count_pos_neg(df, name):
-        pos = (df['SL_or_not'] == 1).sum()
-        neg = (df['SL_or_not'] == 0).sum()
-        print(f"{name}: pos={pos}, neg={neg}, ratio={neg/pos:.2f}")
-
-    print(f"共有基因对样本: {len(balanced_data)}")
-    count_pos_neg(train_df, "Train")
-    count_pos_neg(val_df, "Val")
-    count_pos_neg(test_df, "Test")
-    print(f"Train genes: {len(set(train_df['gene_1']) | set(train_df['gene_2']))}")
-    print(f"Test genes: {len(test_genes)}")
-
-    return train_df, val_df, test_df
 
 def generate_sl_split_cv2_new(
     data,
@@ -358,6 +231,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 
+# 正负样本比大致为1:1
 def generate_sl_split_cv3(
     data,
     pos_neg_ratio=5,
@@ -447,6 +321,8 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 
+
+# 确保正负样本比绝对为1:1
 def generate_sl_split_cv3_new(
     data,
     pos_neg_ratio=5,
@@ -537,33 +413,21 @@ def generate_sl_split_cv3_new(
     return train_df, val_df, test_df
 
 
-
 from torch_geometric.data import Data
+
 
 def get_ppi_graph_tot(ppi_df, sl_data, node_dim=256):
     """
-    修改后的全局PPI图构建函数，使用Geneformer嵌入作为节点特征
+    ppi graph without expression
+    node feature: random initialization
+    no change to geneidx
     """
     # 1. 加载基因到PPI索引的映射
     ppi_mapping = pd.read_csv('./data/gene_ppi_index_mapping.csv')
     gene_to_ppi_idx = dict(zip(ppi_mapping['gene'], ppi_mapping['index']))
-    
-    # 2. 加载Geneformer嵌入
-    with open('./data/geneformer_gene_embs.pkl', 'rb') as f:
-        geneformer_dict = pickle.load(f)
-    
-    # 3. 验证PPI基因覆盖率
-    ppi_genes = ppi_mapping['gene'].unique()
-    covered_genes = [g for g in ppi_genes if g in geneformer_dict]
-    coverage = len(covered_genes) / len(ppi_genes)
-    print(f"PPI节点覆盖统计: {len(covered_genes)}/{len(ppi_genes)} ({coverage:.1%})")
-
-    # 4. 构建节点特征矩阵
-    node_features = []
-    for idx, row in ppi_mapping.iterrows():
-        emb = geneformer_dict.get(row['gene'], np.zeros(node_dim))
-        node_features.append(emb)
-    
+        
+    #     node_features.append(emb)
+    node_features = torch.ones(6125, node_dim) + torch.rand(6125, node_dim) * 0.1
     # 5. 创建全局边索引
     sl_genes = pd.unique(sl_data[['ppi_idx1', 'ppi_idx2']].values.ravel('K'))
     sub_ppi_df = ppi_df[
@@ -581,6 +445,47 @@ def get_ppi_graph_tot(ppi_df, sl_data, node_dim=256):
         x=torch.tensor(np.array(node_features), dtype=torch.float32),
         edge_index=edge_index
     )
+
+
+def get_ppi_graph_tot_expr(ppi_df, sl_data, cell_line, node_dim=256):
+    """
+    cell-line specific PPi net work with expression as node feature
+    no change to gene idx
+    """
+    # load PPi data
+    ppi_mapping = pd.read_csv('./data/gene_ppi_index_mapping.csv')
+    gene_to_ppi_idx = dict(zip(ppi_mapping['gene'], ppi_mapping['index']))
+    
+    # Gene expression data
+    with open(f'./data/GeneExpression/expr_{cell_line}.pkl', 'rb') as f:
+        gene_expr_dict = pickle.load(f)
+    
+    # node feature
+    node_features = torch.zeros(6125, node_dim)
+    for gene, expr in gene_expr_dict.items():
+        if gene in gene_to_ppi_idx:
+            idx = gene_to_ppi_idx[gene]
+            node_features[idx] = torch.tensor([expr], dtype=torch.float32)
+
+    # only coonsider single cellline gene
+    # but no index transition
+    sl_genes = pd.unique(sl_data[['ppi_idx1', 'ppi_idx2']].values.ravel('K'))
+    sub_ppi_df = ppi_df[
+        (ppi_df['idx1'].isin(sl_genes)) & 
+        (ppi_df['idx2'].isin(sl_genes))
+    ]
+    
+    edge_index = torch.tensor([
+        sub_ppi_df['idx1'].tolist(),
+        sub_ppi_df['idx2'].tolist()
+    ], dtype=torch.long)
+
+    # 6. 转换为PyG数据格式
+    return GeometricData(
+        x=torch.tensor(np.array(node_features), dtype=torch.float32),
+        edge_index=edge_index
+    )
+
 
 def report_coverage(sl_data):
     """统计并打印各嵌入方法的基因覆盖率"""

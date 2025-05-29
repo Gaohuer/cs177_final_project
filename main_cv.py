@@ -1,7 +1,7 @@
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-from data_preprocess_single import preprocess_data, generate_sl_splits, get_ppi_graph_tot, report_coverage
-from data_preprocess_single import generate_sl_split_cv2, generate_sl_split_cv3, generate_sl_split_cv3_new, generate_sl_split_cv2_new
-from dataset_single import SLDataset, get_sub_graph
+from data_preprocess_single import preprocess_data, get_ppi_graph_tot_expr, report_coverage
+from data_preprocess_single import generate_sl_split_cv3_new, generate_sl_split_cv2_new, generate_sl_split_cv3
+from dataset_single import SLDataset
 from model_single import TwoGCN_SLClassifier,  FocalLoss
 import pandas as pd
 import torch
@@ -122,11 +122,9 @@ def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=Non
             model.load_state_dict(best_model_state)
 
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
-    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
+    parser.add_argument("--cellline", type=str, default="K562", choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
                         help="Cell line name for SL data.")
     parser.add_argument("--ratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
     parser.add_argument("--epochs", type=int, default=70, help="Number of training epochs.")
@@ -146,17 +144,17 @@ if __name__ == "__main__":
     num_fold = 5
 
     sl_data = pd.read_csv(f"./data/SL_data/SLKB_cellline/SLKB_{cellline_name}.csv")
-    # print(sl_data.head())
     sl_data = preprocess_data(sl_data, cellline_name)
     report_coverage(sl_data)
     print(sl_data.head())
-    # sl_balanced, cv_splits = generate_sl_cv_splits(sl_data, pos_neg_ratio=ratio)
-    # cv_splits = generate_sl_splits_new(sl_data, train_ratio=train_ratio, val_ratio=train_ratio, test_ratio=test_ratio)
+
     if cv == 2:
         train_df, val_df, test_df = generate_sl_split_cv2_new(sl_data, pos_neg_ratio=ratio, test_ratio=0.2)
     elif cv == 3:
-        # train_df, val_df, test_df = generate_sl_split_cv3(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
-        train_df, val_df, test_df = generate_sl_split_cv3_new(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
+        # use this if need 1:1 PNR
+        #train_df, val_df, test_df = generate_sl_split_cv3_new(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
+        # use this if not strictly need PNR
+        train_df, val_df, test_df = generate_sl_split_cv3(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
     print(train_df.shape)
     print(val_df.shape)
     print(test_df.shape)
@@ -165,7 +163,7 @@ if __name__ == "__main__":
     ppi_df = ppi_df[['idx1','idx2','score']]
     # print(ppi_df.head())
     node_dim = 256
-    ppi_graph_tot = get_ppi_graph_tot(ppi_df, sl_data, node_dim)
+    ppi_graph_tot = get_ppi_graph_tot_expr(ppi_df, sl_data, cellline_name,node_dim)
     print("finish_transition:", ppi_graph_tot)
 
     # 这段可以用来调试dataset部分的结果
@@ -191,11 +189,11 @@ if __name__ == "__main__":
     AUPR = []
     F1 = []
     for i in range(num_fold):
-        train_dataset = SLDataset(train_df)
+        train_dataset = SLDataset(train_df, cellline_name)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True)
-        val_dataset = SLDataset(val_df)
+        val_dataset = SLDataset(val_df, cellline_name)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=128, shuffle=False)
-        test_dataset = SLDataset(test_df)
+        test_dataset = SLDataset(test_df, cellline_name)
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -220,7 +218,7 @@ if __name__ == "__main__":
     print(f"AUC:{auc_final}, AUPR:{aupr_final}, F1:{f1_final}")
 
     # save as .json file
-    os.makedirs(f'./result/cv{cv}', exist_ok=True)
+    os.makedirs(f'./new_model_result/cv{cv}', exist_ok=True)
     result = {
         "cellline_name": cellline_name,
         "ratio": ratio,
@@ -233,7 +231,7 @@ if __name__ == "__main__":
         "test_f1": f1_final
     }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    json_path = os.path.join(f'./result/cv{cv}', f"result_{cellline_name}_{timestamp}.json")
+    json_path = os.path.join(f'./new_model_result/cv{cv}', f"result_{cellline_name}_{timestamp}.json")
     with open(json_path, "w") as f:
         json.dump(result, f, indent=4)
     print(f"Results saved to {json_path}")
