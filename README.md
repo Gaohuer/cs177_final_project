@@ -1,4 +1,4 @@
-# CS177 SL prediction
+# CS177 SL prediction Baseline
 
 ## Requirement
 ```
