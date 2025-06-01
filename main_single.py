@@ -121,8 +121,11 @@ def train(ratio, model, train_loader, val_loader, ppi_graph_tot=None, ppi_df=Non
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
 
-
-
+def str2bool(v):
+    if isinstance(v, bool): return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'): return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'): return False
+    else: raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
@@ -133,6 +136,10 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=70, help="Number of training epochs.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--patience", type=int, default=10, help="Patience for early stopping.")
+    parser.add_argument("--use_gcn", type=str2bool, default=True, help="Use GCN features")
+    parser.add_argument("--use_scg", type=str2bool, default=True, help="Use scGPT features")
+    parser.add_argument("--use_genePT", type=str2bool, default=True, help="Use GenePT features")
+    parser.add_argument("--use_esm", type=str2bool, default=True, help="Use ESM features")
 
     args = parser.parse_args()
     print(args)
@@ -202,7 +209,11 @@ if __name__ == "__main__":
             scg_dim=512,
             genePT_dim=512,
             esm_dim=256,
-            hidden_dim=256, out_dim=256
+            hidden_dim=256, out_dim=256,
+            use_gcn=args.use_gcn,
+            use_scg=args.use_scg,
+            use_genePT=args.use_genePT,
+            use_esm=args.use_esm
         )
         print("get model")
         # train(model, train_loader, ppi_df, device, epochs=10, lr=1e-3)
