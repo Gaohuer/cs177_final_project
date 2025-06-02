@@ -129,7 +129,7 @@ def str2bool(v):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
-    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S"],
+    parser.add_argument("--cellline", type=str, default="JURKAT", choices=["JURKAT", "K562", "MEL202", "A549", "PK1", "PATU8988S", "HSC5", "HS936T", "IPC298"],
                         help="Cell line name for SL data.")
     parser.add_argument("--trainratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
     parser.add_argument("--testratio", type=float, default=1.0, help="Weight ratio for positive class in loss function.")
