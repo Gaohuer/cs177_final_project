@@ -473,6 +473,7 @@ def get_ppi_graph_tot_expr(ppi_df, sl_data, cell_line, node_dim=256):
     sub_ppi_df = ppi_df[
         (ppi_df['idx1'].isin(sl_genes)) & 
         (ppi_df['idx2'].isin(sl_genes))
+        # (ppi_df['score'] > 200)
     ]
     
     edge_index = torch.tensor([

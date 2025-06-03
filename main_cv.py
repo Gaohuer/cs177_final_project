@@ -152,9 +152,9 @@ if __name__ == "__main__":
         train_df, val_df, test_df = generate_sl_split_cv2_new(sl_data, pos_neg_ratio=ratio, test_ratio=0.2)
     elif cv == 3:
         # use this if need 1:1 PNR
-        #train_df, val_df, test_df = generate_sl_split_cv3_new(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
+        train_df, val_df, test_df = generate_sl_split_cv3_new(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
         # use this if not strictly need PNR
-        train_df, val_df, test_df = generate_sl_split_cv3(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
+        # train_df, val_df, test_df = generate_sl_split_cv3(sl_data, pos_neg_ratio=ratio, test_gene_ratio=0.2)
     print(train_df.shape)
     print(val_df.shape)
     print(test_df.shape)
