@@ -1,0 +1,22 @@
+{
+    "train_cell_line": [
+        "PK1",
+        "A549",
+        "K562",
+        "JURKAT",
+        "HS936T",
+        "HSC5",
+        "IPC298",
+        "PATU8988S",
+        "MELJUSO"
+    ],
+    "test_cell_line": "MEL202",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.8202155851828852,
+    "test_aupr": 0.8011049324952668,
+    "test_f1": 0.7708333333333334
+}

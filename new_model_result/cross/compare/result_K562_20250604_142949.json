@@ -1,0 +1,14 @@
+{
+    "train_cell_line": [
+        "JURKAT"
+    ],
+    "test_cell_line": "K562",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.6843230156664127,
+    "test_aupr": 0.6971203272103729,
+    "test_f1": 0.5718642775447961
+}

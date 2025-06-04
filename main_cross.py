@@ -167,8 +167,11 @@ def train(ratio, model, cellline_datasets, device='cpu', epochs=10, lr=1e-4, pat
 
 
 if __name__ == "__main__":
+
+    ALL_CELL_LINES = ["PK1", "A549", "K562", "JURKAT", "HS936T","HSC5", "IPC298", "MEL202", "PATU8988S", "MELJUSO"]  # 示例列表，请替换为实际的完整细胞系列表
+
     parser = argparse.ArgumentParser(description="Train SL prediction model with early stopping.")
-    parser.add_argument('--train_cell_lines', nargs='+', default=["PK1", "A549", "K562"],
+    parser.add_argument('--train_cell_lines', nargs='+', default=None,
                         help="List of cell lines for training, e.g. --train_cell_lines PK1 A549 K562")
     parser.add_argument('--test_cell_line', type=str, default="JURKAT",
                         help="Target cell line for testing, e.g. --test_cell_line JURKAT")
@@ -177,9 +180,13 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=70, help="Number of training epochs.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--patience", type=int, default=10, help="Patience for early stopping.")
+    parser.add_argument("--batch", type=int, default=128, help="Batch size for training.")
 
     args = parser.parse_args()
     print(args)
+
+    if args.train_cell_lines is None:
+        args.train_cell_lines = [cell for cell in ALL_CELL_LINES if cell != args.test_cell_line]
 
     # train_ratio = args.trainratio
     # test_ratio = args.testratio
@@ -196,6 +203,7 @@ if __name__ == "__main__":
     train_ratio = args.trainratio
     test_ratio = args.testratio
     patience = args.patience
+    batch = args.batch
 
     ppi_df = pd.read_csv('./data/9606_prot_link/ppi.csv')[['idx1', 'idx2', 'score']]
 
@@ -213,8 +221,8 @@ if __name__ == "__main__":
                  
         train_dataset = SLDataset(train_df, name)
         val_dataset = SLDataset(val_df, name)
-        train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=batch, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch, shuffle=False)
 
         ppi_graph = get_ppi_graph_tot_expr(ppi_df, sl_data, name, node_dim)
 
@@ -234,7 +242,7 @@ if __name__ == "__main__":
     ppi_graph_test = get_ppi_graph_tot_expr(ppi_df, sl_data, test_cell_line, node_dim)
 
     test_dataset = SLDataset(test_df, test_cell_line)
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
