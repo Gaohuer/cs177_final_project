@@ -1,0 +1,11 @@
+{
+    "cellline_name": "JURKAT",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.8088495089684278,
+    "test_aupr": 0.8192821289195752,
+    "test_f1": 0.7309843695592515
+}

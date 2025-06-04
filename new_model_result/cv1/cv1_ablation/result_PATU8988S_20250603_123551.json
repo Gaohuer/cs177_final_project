@@ -1,0 +1,11 @@
+{
+    "cellline_name": "PATU8988S",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.815818948372474,
+    "test_aupr": 0.8359528094284284,
+    "test_f1": 0.7470354557680252
+}

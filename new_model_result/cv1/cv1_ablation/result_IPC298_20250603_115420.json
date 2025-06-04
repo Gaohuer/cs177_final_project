@@ -1,0 +1,11 @@
+{
+    "cellline_name": "IPC298",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.7761561729377096,
+    "test_aupr": 0.7665503243714668,
+    "test_f1": 0.7164180639243843
+}

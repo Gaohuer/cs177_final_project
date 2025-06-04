@@ -1,0 +1,11 @@
+{
+    "cellline_name": "HS936T",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.7906528304267547,
+    "test_aupr": 0.798687222172818,
+    "test_f1": 0.7160191584701833
+}

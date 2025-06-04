@@ -1,0 +1,11 @@
+{
+    "cellline_name": "HSC5",
+    "train_ratio": 1.0,
+    "test_ratio": 1.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.695075700417484,
+    "test_aupr": 0.7184988930894104,
+    "test_f1": 0.639350673150554
+}
