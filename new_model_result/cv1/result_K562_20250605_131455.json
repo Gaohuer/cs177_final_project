@@ -1,0 +1,11 @@
+{
+    "cellline_name": "K562",
+    "train_ratio": 1.0,
+    "test_ratio": 5.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.8289821400688752,
+    "test_aupr": 0.5325531469994185,
+    "test_f1": 0.512201120886392
+}
