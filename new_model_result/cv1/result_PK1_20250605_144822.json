@@ -1,0 +1,11 @@
+{
+    "cellline_name": "PK1",
+    "train_ratio": 1.0,
+    "test_ratio": 5.0,
+    "epochs": 70,
+    "lr": 0.0001,
+    "patience": 10,
+    "test_auc": 0.7720296004122916,
+    "test_aupr": 0.48002702124411434,
+    "test_f1": 0.42608531976044806
+}
