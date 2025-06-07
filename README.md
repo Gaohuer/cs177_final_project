@@ -1,6 +1,7 @@
 # CS177 SL prediction Baseline
 
 ## Requirement
+
 ```
 python = 3.11.11
 numpy = 1.26.4
@@ -11,79 +12,54 @@ torch-geometric = 2.6.1
 ```
 
 ## Single cell-line
-```
+
+```bash
 # PNR
-python main_single.py
+python main_single.py --cellline JURKAT --train_ratio 1 --test_ratio 1
 
 # CV
-python main_cv.py
+python main_cv.py --cellline JURKAT --cv 2
 ```
 
 ## Cross cell-line
 
-### How to train
+```bash
+# designated train cell-line
+python main_cross.py --train_cell_line K562 PK1 --test_cell_line JURKAT
 
-#### Basic mode
+# default train cell-line
+python main_cross.py --test_cell_line JURKAT
 
-PNR : Train on 1:1, Test on 1:1, 1:2, 1:5  ...
-
-Train cell-line : ["xxx", "yyy", ...]
-Test caell-line : "zzz"
-
-#### code
-
-##### How to do split?
-
-**训练和验证：**
-Train cell-line: A, B, C,...
-对每一个细胞系**分别**进行正负样本比的分割，得到平衡后的 A, B, C, ...
-
-然后对每一个细胞系都分割训练和验证集：[[train_A, val_A], [train_B, val_B], ...]
-
-1. 通过dataset转化为 train_A_dataset --> train_A_dataloader, ....
-
-2. 对每个细胞系生成一张自己的PPI_graph, 用data_preprocess_single中函数的就可以。得到： ppi_graph_A, ppi_graph_B,....
-
-**测试集:** Z
-对这个细胞系做PNR的均衡，直接生成 dataset 和 ppi_graph_Z
-
-
-##### How to train
-
-将多个细胞系的数据（dataset_A, ppi_A）**轮流**放入模型训练和验证。保证每个细胞系的训练下传入的是自己的ppi_graph.
-
-1. 轮流训练方法：一个个细胞系下训练，自己训练，自己测评。
-```
-for _ in epoches:
-    for cl in cell-lines (random shuffle):
-        for batch in train_loader_cl:
-            train model with (batch, ppi_cl) --> back propagation
-        for batch in val_loader_cl:
-            evaluate model with (batch, ppi_cl) --> get label, pred, prob
-        get AUC, AUPR, F1...
-
-cl = test_cell-line
-for batch in test_loader_cl:
-    evaluate model with (batch, ppi_cl) --> get label, pred, prob
-get AUC, AUPR, F1...
-
+# opposite label case in K562 and JURKAT
+python main_case.py
 ```
 
-<!-- 2. 以batch为单位，细胞系混合训练：需要在最开始同一batch数量，所有细胞系得按照最短的细胞系进行截断。
-```
-for _ in epoches:
-    for cl in cell-lines:
-        batch = next_iter(train_loader_cl)
-        train model with (batch, ppi_cl) --> back propagation
-    for cl in cell-lines:
-        batch = next_iter(val_loader_cl)
-        train model with (batch, ppi_cl) --> get label, pred, prob
-    get AUC, AUPR, F1
+## Test Result (.csv)
 
-cl = test_cell-line
-for batch in test_loader_cl:
-    evaluate model with (batch, ppi_cl) --> get label, pred, prob
-get AUC, AUPR, F1...
-``` -->
+./test_result: csv form of results.
 
-目前做法，每个epoch内随机细胞系顺序。
+## Data
+
+./data/9606_prot_link : PPI and protein sequence
+
+./data/esm_embedding : esm embedding (w and w/o PCA)
+
+./data/GeneExpression : Gene expression data from Depmap, origin data and cell-line data
+
+./data/GenePT_embedding_v2 : GenePT embedding (a and w/o PCA) from database
+
+./data/SL_data : SLKB raw data and single cell-line data
+
+./data : scGPT and Geneformer embedding
+
+## Results (.json)
+
+./new_model_result/cv1 (cv2, cv3) : single cell-line
+
+./new_model_result/cross : cross cell-line
+
+## Supplementary coding
+
+./esm_pca : esm model and pca coding
+
+./data_review : coverage of date for simple analysis.

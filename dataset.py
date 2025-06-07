@@ -70,6 +70,7 @@ class SLDataset(Dataset):
         self.ppi_pair_idx = []
         self.esm_1_embs = []
         self.esm_2_embs = []
+        self.gene_pair = []
 
         self.labels = []
         for  _, row in sl_data.iterrows():
@@ -81,6 +82,7 @@ class SLDataset(Dataset):
             self.gpt_2_embs.append(get_gpt_emb(row['gene_2'], genept_dict, genept_dim))
             self.esm_1_embs.append(self.get_esm_emb(row['gene_1']))
             self.esm_2_embs.append(self.get_esm_emb(row['gene_2']))
+            self.gene_pair.append(f"{row['gene_1']}_{row['gene_2']}" )
             # print(get_prot_seq(row['gene_2_protid'], prot_seq_dict))
             # break
             self.labels.append(row['SL_or_not'])
@@ -113,6 +115,7 @@ class SLDataset(Dataset):
         gpt_2 = self.gpt_2_embs[idx]
         label = self.labels[idx]
         pair_idx = self.ppi_pair_idx[idx]
+        gene_pair = self.gene_pair[idx]
 
         scg_pair = torch.cat([scg_1, scg_2], dim=0)  # shape = [2 * scg_dim]
         gpt_pair = torch.cat([gpt_1, gpt_2], dim=0)  # shape = [2 * genept_dim]
@@ -123,7 +126,8 @@ class SLDataset(Dataset):
             "gpt_pair": gpt_pair,
             "esm_pair": esm_pair,
             "pair_idx": pair_idx,
-            "label": label
+            "label": label,
+            "gene_pair": gene_pair
             # "ppi_graph":self.ppi_graph
         }
     

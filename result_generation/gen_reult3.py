@@ -89,6 +89,6 @@ for i, ratio in enumerate(ratios):
                  fontsize=9)
 
 plt.tight_layout()
-plt.savefig("./pics/pic_pnr.png")
+plt.savefig("../pics/pic_pnr.png")
 plt.show()
 
